@@ -109,7 +109,7 @@ int main() {
 		l = 1;
 		
 		// do stuff for 30 seconds
-		while (elapsed <= MAX_TIME) {
+		while (elapsed < MAX_TIME) {
 			char buf[BUFFER_SIZE];
 			snprintf(buf, sizeof buf, "%2.3f: Child %d message %d", elapsed, i + 1, l++);
 
