@@ -47,5 +47,7 @@ int main() {
         printf("%\n");
         sleep(1); //for testing generating time stamps
     }
+    getElapsedSeconds(&minsElapsed, &secsElapsed);
+    printf("%2.3f", secsElapsed);
     return 0;
 }
