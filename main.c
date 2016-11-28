@@ -49,6 +49,7 @@ int main() {
 	char read_msg[BUFFER_SIZE];
 
 	pid_t pid;
+	pid_t pids[NUM_CHILD];
 	int fd[2 * NUM_PIPES];
 	int i, j;
     int minsElapsed;
@@ -61,13 +62,13 @@ int main() {
 		}
 	}
 
-	for (i = 0, j = 2 * i; i < NUM_CHILD; i++) {
+	for (i = 0, j = 2 * i; i < NUM_CHILD; ++i, j = 2 * i) {
 		pid = fork();
 		if (pid > 0) {
 			close(fd[READ_END + j]);
 			write(fd[WRITE_END + j], write_msg, strlen(write_msg) + 1);
 
-			printf("Parent: Wrote '%s' to the pipe.\n", write_msg);
+			printf("Parent %d: Wrote '%s' to the pipe.\n", pid, write_msg);
 
 			close(fd[WRITE_END + j]);
 		} else if (pid == 0) {
@@ -77,6 +78,7 @@ int main() {
 			printf("Child: Read '%s' from the pipe.\n", read_msg);
 
 			close(fd[READ_END + j]);
+			exit(0);
 		} else {
 			fprintf(stderr, "fork() failed");
 			return 1;
