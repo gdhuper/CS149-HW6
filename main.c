@@ -19,7 +19,7 @@
 #define WRITE_END 1
 #define NUM_PIPES 5
 #define NUM_CHILD 5
-#define MAX_TIME 30.0
+#define MAX_TIME 10.0
 
 struct timeval start;
 
@@ -92,39 +92,39 @@ int main() {
 		start = time(NULL);
 
 		while (k > 0) {
-			for (j = 0; j < NUM_CHILD * 2; j += 2) {
-				inputfds = inputs;
+			inputfds = inputs;
 
-				timeout.tv_sec = 2;
-				timeout.tv_usec = 500000;
+			timeout.tv_sec = 2;
+			timeout.tv_usec = 500000;
 
-				result = select(fd[READ_END + j] + 1, &inputfds,
-						(fd_set *) 0, (fd_set *) 0, &timeout);
+			result = select(fd[NUM_CHILD * 2 - 1], &inputfds,
+					NULL, NULL, NULL);
 
-				switch(result) {
-					case 0: {
-						// child terminated
-						--k;
-						fflush(stdout);
-						break;
-					}
-					case -1: {
-						perror("select");
-						exit(1);
-					}
-					default: {
+			switch(result) {
+				case 0: {
+					fflush(stdout);
+					break;
+				}
+				case -1: {
+					perror("select");
+					exit(1);
+				}
+				default: {
+					for (j = 0; j < NUM_CHILD * 2 && result != 0; j += 2) {
 						if (FD_ISSET(fd[READ_END + j], &inputfds)) {
 							ioctl(fd[READ_END + j], FIONREAD, &nread);
+							
+							close(fd[WRITE_END +j]);
+							nread = read(fd[READ_END + j], buffer, nread);
 
 							if (nread == 0) {
-								printf("Keyboard input done.\n");
-								exit(0);
+								--k;
+							} else {
+								buffer[nread] = 0;
+								printf("%s\n", buffer);
 							}
-
-							nread = read(fd[READ_END + j], buffer, nread);
-							buffer[nread] = 0;
-							printf("%s\n", buffer);
-						}			 
+							--result;
+						}
 					}
 				}
 			}
@@ -138,20 +138,24 @@ int main() {
 		srand(time(NULL) ^ (getpid()<<16));
 		start = time(NULL);
 		elapsed = 0;
-		l = 1;
+		l = 1; // message number
 
 		// do stuff for 30 seconds
-		while (elapsed < MAX_TIME) {
-			snprintf(buf, sizeof buf, "%2.3f: Child %d message %d", elapsed, i + 1, l++);
-
-			write(fd[WRITE_END + j], buf, strlen(buf) + 1);
-
+		for (;;) {
 			sleep(rand() % 3);
 			end = time(NULL);
 			elapsed = difftime(end, start);
+
+			if (elapsed < MAX_TIME) {
+				snprintf(buf, sizeof buf, "%2.3f: Child %d message %d", elapsed, i + 1, l++);
+				close(fd[READ_END + j]);
+				write(fd[WRITE_END + j], buf, strlen(buf) + 1);
+			} else {
+				break;	
+			}
 		}
-		printf("Child %d done at %f\n", i + 1, elapsed);
 		close(fd[WRITE_END + j]);
+		printf("Child %d done.\n", i + 1);
 		exit(0);
 	}
 
