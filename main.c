@@ -147,7 +147,7 @@ int main() {
 			elapsed = difftime(end, start);
 
 			if (elapsed < MAX_TIME) {
-				snprintf(buf, sizeof buf, "%2.3f: Child %d message %d", elapsed, i + 1, l++);
+				snprintf(buf, sizeof buf, "%1d:%2.3f: Child %d message %d",0, elapsed, i + 1, l++);
 				close(fd[READ_END + j]);
 				write(fd[WRITE_END + j], buf, strlen(buf) + 1);
 			} else {
