@@ -14,12 +14,11 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 32
 #define READ_END 0
 #define WRITE_END 1
-#define NUM_PIPES 5
 #define NUM_CHILD 5
-#define MAX_TIME 10.0
+#define MAX_TIME 30.0
 
 struct timeval start;
 
@@ -43,26 +42,33 @@ void getElapsedSeconds(int* minsElapsed, double* secsElapsed)
 
 }
 
-int main() {
+int main()
+{
 	char read_msg[BUFFER_SIZE];
 
 	time_t start, end;
 	double elapsed;
 	pid_t pid;
-	int fd[NUM_PIPES * 2];
+	int fd[NUM_CHILD * 2];
 	int i, j, k, l;
 	int minsElapsed;
 	double secsElapsed;
 
-	char buffer[128];
+	char buffer[BUFFER_SIZE * NUM_CHILD];
 	int result, nread;
 
 	fd_set inputs, inputfds;
-	struct timeval timeout;
 
 	FD_ZERO(&inputs);
 
-	for (i = 0; i < NUM_PIPES * 2; i += 2) {
+	FILE *f = fopen("output.txt", "w");
+	if (f == NULL) {
+		perror("Error opening file!\n");
+		exit(1);
+	}
+
+	// Create pipes
+	for (i = 0; i < NUM_CHILD * 2; i += 2) {
 		if (pipe(fd + i) == -1) {
 			fprintf(stderr, "pipe() failed");	
 			return 1;
@@ -94,9 +100,6 @@ int main() {
 		while (k > 0) {
 			inputfds = inputs;
 
-			timeout.tv_sec = 2;
-			timeout.tv_usec = 500000;
-
 			result = select(fd[NUM_CHILD * 2 - 1], &inputfds,
 					NULL, NULL, NULL);
 
@@ -118,10 +121,11 @@ int main() {
 							nread = read(fd[READ_END + j], buffer, nread);
 
 							if (nread == 0) {
+								// pipe is closed, child is done
 								--k;
 							} else {
 								buffer[nread] = 0;
-								printf("%s\n", buffer);
+								fprintf(f, "%s\n", buffer);
 							}
 							--result;
 						}
@@ -129,7 +133,11 @@ int main() {
 				}
 			}
 		}
-		puts("All children exited");
+
+		// close file
+		fclose(f);
+
+		puts("All children exited.");
 	} else if (pid == 0) {
 		// child process
 
@@ -154,6 +162,7 @@ int main() {
 				break;	
 			}
 		}
+		// close pipe, next read will return 0
 		close(fd[WRITE_END + j]);
 		printf("Child %d done.\n", i + 1);
 		exit(0);
