@@ -55,14 +55,14 @@ int main() {
     int minsElapsed;
     double secsElapsed;
 
-	for (i = 0; i < NUM_PIPES; i += 2) {
+	for (i = 0; i < NUM_PIPES * 2; i += 2) {
 		if (pipe(fd + i) == -1) {
 			fprintf(stderr, "pipe() failed");	
 			return 1;
 		}
 	}
 
-	for (i = 0, j = 2 * i; i < NUM_CHILD; ++i, j = 2 * i) {
+	for (i = 0, j = 0; i < NUM_CHILD; ++i, j = 2 * i) {
 		pid = fork();
 		if (pid > 0) {
 			close(fd[READ_END + j]);
@@ -75,7 +75,7 @@ int main() {
 			close(fd[WRITE_END + j]);
 			read(fd[READ_END + j], read_msg, BUFFER_SIZE);
 
-			printf("Child: Read '%s' from the pipe.\n", read_msg);
+			printf("Child of %d: Read '%s' from the pipe.\n", getpid(), read_msg);
 
 			close(fd[READ_END + j]);
 			exit(0);
