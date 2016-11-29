@@ -67,10 +67,26 @@ void runChildProcess(int childID, int* fd)
 		elapsed = difftime(end, start);
 		
 		if (elapsed < MAX_TIME) {
+			
+			if(childID == 5)
+            {
+                char str[100];
+
+                printf( "Enter a message :");
+                fgets(str, sizeof(str), stdin);
+                getElapsedSeconds(&minsElapsed, &secsElapsed);
+                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %s", minsElapsed, secsElapsed, childID,
+                         str);
+                close(*fd + READ_END);
+                write(*fd + WRITE_END, buf, strlen(buf) + 1);
+            }
+			else{
 			getElapsedSeconds(&minsElapsed, &secsElapsed);
 			snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %d", minsElapsed, secsElapsed, childID, messageNumber++);
 			close(*fd + READ_END);
 			write(*fd + WRITE_END, buf, strlen(buf) + 1);
+		}
+
 		} else {
 			break;	
 		}
@@ -170,7 +186,13 @@ int main()
 	if (pid > 0) {
 		// parent process
 		runParentProcess(inputs, fd);
-	} else if (pid == 0) {
+	} 
+	else if(pid == 0 && i ==4)
+    {
+        runChildProcess(i + 1, &fd[i * 2]);
+    }
+	
+	else if (pid == 0) {
 		// child process
 		runChildProcess(i + 1, &fd[i * 2]);
 	}
