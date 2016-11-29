@@ -20,7 +20,7 @@
 #define NUM_CHILD 5
 #define MAX_TIME 30.0
 
-struct timeval start;
+struct timeval old;
 
 /*
  * Calculates elapsed time and formats it
@@ -29,8 +29,8 @@ void getElapsedSeconds(int* minsElapsed, double* secsElapsed)
 {
 	struct timeval now;
 	gettimeofday(&now, NULL);
-	double seconds = (double) now.tv_sec - start.tv_sec;
-	double useconds = (double) now.tv_usec - start.tv_usec;
+	double seconds = (double) now.tv_sec - old.tv_sec;
+	double useconds = (double) now.tv_usec - old.tv_usec;
 	double result = seconds + (useconds / 1000000);
 	double temp =  round(result * 1000.0) / 1000.0;
 
@@ -39,6 +39,7 @@ void getElapsedSeconds(int* minsElapsed, double* secsElapsed)
 	*minsElapsed = intSec / 60;
 	intSec %= 60;
 	*secsElapsed += intSec;
+	
 
 }
 
@@ -47,6 +48,7 @@ void runChildProcess(int childID, int* fd)
 	char buf[BUFFER_SIZE];
 	int minsElapsed;
 	double secsElapsed;
+	double tempSecs;
 	int messageNumber;
 	time_t start, end;
 	double elapsed;
@@ -57,14 +59,16 @@ void runChildProcess(int childID, int* fd)
 	messageNumber = 1; // message number
 
 	// do stuff for 30 seconds
+	//getElapsedSeconds(&minsElapsed, &tempSecs);
+	gettimeofday(&old, NULL);
 	for (;;) {
 		sleep(rand() % 3);
 		end = time(NULL);
 		elapsed = difftime(end, start);
-
+		
 		if (elapsed < MAX_TIME) {
 			getElapsedSeconds(&minsElapsed, &secsElapsed);
-			snprintf(buf, sizeof buf, "0:%2.3f: Child %d message %d", secsElapsed, childID, messageNumber++);
+			snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %d", minsElapsed, secsElapsed, childID, messageNumber++);
 			close(*fd + READ_END);
 			write(*fd + WRITE_END, buf, strlen(buf) + 1);
 		} else {
