@@ -14,7 +14,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-#define BUFFER_SIZE 32
+#define BUFFER_SIZE 64
 #define READ_END 0
 #define WRITE_END 1
 #define NUM_CHILD 5
@@ -44,7 +44,7 @@ void getElapsedSeconds(int* minsElapsed, double* secsElapsed)
 
 void runChildProcess(int childID, int* fd)
 {
-	char buf[BUFFER_SIZE];
+	char write_msg[BUFFER_SIZE];
 	int minsElapsed;
 	double secsElapsed;
 	int messageNumber;
@@ -54,7 +54,7 @@ void runChildProcess(int childID, int* fd)
 	srand(time(NULL) ^ (getpid()<<16));
 	start = time(NULL);
 	elapsed = 0;
-	messageNumber = 1; // message number
+	messageNumber = 1;
 
 	// do stuff for 30 seconds
 	for (;;) {
@@ -64,9 +64,9 @@ void runChildProcess(int childID, int* fd)
 
 		if (elapsed < MAX_TIME) {
 			getElapsedSeconds(&minsElapsed, &secsElapsed);
-			snprintf(buf, sizeof buf, "0:%2.3f: Child %d message %d", secsElapsed, childID, messageNumber++);
+			snprintf(write_msg, sizeof write_msg, "0:%2.3f: Child %d message %d", secsElapsed, childID, messageNumber++);
 			close(*fd + READ_END);
-			write(*fd + WRITE_END, buf, strlen(buf) + 1);
+			write(*fd + WRITE_END, write_msg, strlen(write_msg) + 1);
 		} else {
 			break;	
 		}
@@ -77,21 +77,31 @@ void runChildProcess(int childID, int* fd)
 	exit(0);
 }
 
-void runParentProcess(fd_set inputs, int fd[])
+void runParentProcess(int fd[])
 {
-	fd_set inputfds;
-	int j, k;
+	fd_set inputs, inputfds;
+	int i, j;
 	char read_message[BUFFER_SIZE * NUM_CHILD];
 	int result, nread;
-
-	k = NUM_CHILD;
+	int runningChildren[NUM_CHILD]; 
 
 	FILE *f = fopen("output.txt", "w");
 	if (f == NULL) {
 		perror("Error opening file!\n");
 		exit(1);
 	}
-	while (k > 0) {
+	
+	for (i = 0; i < NUM_CHILD; ++i) runningChildren[i] = 1;
+
+	j = NUM_CHILD;
+
+	while (j > 0) {
+		FD_ZERO(&inputs);
+		for (i = 0; i < NUM_CHILD; ++i) {
+			if (runningChildren[i]) {
+				FD_SET(fd[i * 2], &inputs);
+			}
+		}
 		inputfds = inputs;
 
 		result = select(fd[NUM_CHILD * 2 - 1], &inputfds,
@@ -105,18 +115,21 @@ void runParentProcess(fd_set inputs, int fd[])
 				perror("select");
 				exit(1);
 			default:
-				for (j = 0; j < NUM_CHILD * 2 && result != 0; j += 2) {
-					if (FD_ISSET(fd[READ_END + j], &inputfds)) {
-						ioctl(fd[READ_END + j], FIONREAD, &nread);
+				for (i = 0; i < NUM_CHILD * 2 && result > 0; i += 2) {
+					if (FD_ISSET(fd[READ_END + i], &inputfds)) {
+						ioctl(fd[READ_END + i], FIONREAD, &nread);
 
-						close(fd[WRITE_END + j]);
-						nread = read(fd[READ_END + j], read_message, nread);
+						close(fd[WRITE_END + i]);
+						nread = read(fd[READ_END + i], read_message, nread);
 
 						if (nread == 0) {
 							// pipe is closed, child is done
-							--k;
+							FD_CLR(fd[READ_END + i], &inputs);
+							runningChildren[i / 2] = 0;
+							--j;
 						} else {
 							read_message[nread] = 0;
+							printf("%s\n", read_message);
 							// TODO: add timestamp
 							fprintf(f, "%s\n", read_message);
 						}
@@ -137,9 +150,6 @@ int main()
 	pid_t pid;
 	int fd[NUM_CHILD * 2];
 	int i;
-	fd_set inputs;
-
-	FD_ZERO(&inputs);
 
 	// Create pipes
 	for (i = 0; i < NUM_CHILD * 2; i += 2) {
@@ -147,7 +157,6 @@ int main()
 			fprintf(stderr, "pipe() failed");	
 			return 1;
 		}
-		FD_SET(fd[i], &inputs);
 	}
 
 	// Create child processes
@@ -165,7 +174,7 @@ int main()
 
 	if (pid > 0) {
 		// parent process
-		runParentProcess(inputs, fd);
+		runParentProcess(fd);
 	} else if (pid == 0) {
 		// child process
 		runChildProcess(i + 1, &fd[i * 2]);
