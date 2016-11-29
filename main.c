@@ -42,17 +42,48 @@ void getElapsedSeconds(int* minsElapsed, double* secsElapsed)
 
 }
 
+void runChildProcess(int childID, int* fd)
+{
+	char buf[BUFFER_SIZE];
+	int minsElapsed;
+	double secsElapsed;
+	int messageNumber;
+	time_t start, end;
+	double elapsed;
+
+	srand(time(NULL) ^ (getpid()<<16));
+	start = time(NULL);
+	elapsed = 0;
+	messageNumber = 1; // message number
+
+	// do stuff for 30 seconds
+	for (;;) {
+		sleep(rand() % 3);
+		end = time(NULL);
+		elapsed = difftime(end, start);
+
+		if (elapsed < MAX_TIME) {
+			getElapsedSeconds(&minsElapsed, &secsElapsed);
+			snprintf(buf, sizeof buf, "0:%2.3f: Child %d message %d", secsElapsed, childID + 1, messageNumber++);
+			close(*fd + READ_END);
+			write(*fd + WRITE_END, buf, strlen(buf) + 1);
+		} else {
+			break;	
+		}
+	}
+	// close pipe, next read will return 0
+	close(*fd + WRITE_END);
+	printf("Child %d done.\n", childID + 1);
+	exit(0);
+}
+
 int main()
 {
 	char read_msg[BUFFER_SIZE];
 
-	time_t start, end;
-	double elapsed;
 	pid_t pid;
 	int fd[NUM_CHILD * 2];
-	int i, j, k, l;
-	int minsElapsed;
-	double secsElapsed;
+	int i, j, k;
 
 	char buffer[BUFFER_SIZE * NUM_CHILD];
 	int result, nread;
@@ -94,8 +125,8 @@ int main()
 	if (pid > 0) {
 		// parent process
 
+		// number of running child processes
 		k = NUM_CHILD;
-		start = time(NULL);
 
 		while (k > 0) {
 			inputfds = inputs;
@@ -117,7 +148,7 @@ int main()
 						if (FD_ISSET(fd[READ_END + j], &inputfds)) {
 							ioctl(fd[READ_END + j], FIONREAD, &nread);
 							
-							close(fd[WRITE_END +j]);
+							close(fd[WRITE_END + j]);
 							nread = read(fd[READ_END + j], buffer, nread);
 
 							if (nread == 0) {
@@ -125,6 +156,7 @@ int main()
 								--k;
 							} else {
 								buffer[nread] = 0;
+								// TODO: add timestamp
 								fprintf(f, "%s\n", buffer);
 							}
 							--result;
@@ -140,39 +172,8 @@ int main()
 		puts("All children exited.");
 	} else if (pid == 0) {
 		// child process
-
-		char buf[BUFFER_SIZE];
-
-		srand(time(NULL) ^ (getpid()<<16));
-		start = time(NULL);
-		elapsed = 0;
-		l = 1; // message number
-
-		// do stuff for 30 seconds
-		for (;;) {
-			sleep(rand() % 3);
-			end = time(NULL);
-			elapsed = difftime(end, start);
-
-			if (elapsed < MAX_TIME) {
-				snprintf(buf, sizeof buf, "%1d:%2.3f: Child %d message %d",0, elapsed, i + 1, l++);
-				close(fd[READ_END + j]);
-				write(fd[WRITE_END + j], buf, strlen(buf) + 1);
-			} else {
-				break;	
-			}
-		}
-		// close pipe, next read will return 0
-		close(fd[WRITE_END + j]);
-		printf("Child %d done.\n", i + 1);
-		exit(0);
+		runChildProcess(i, &fd[j]);
 	}
 
-	//    for (int i = 0; i < 10; ++i) {
-	//        getElapsedSeconds(&minsElapsed, &secsElapsed);
-	//        printf("%1d:%2.3f", 0, secsElapsed);
-	//        printf("\n");
-	//        sleep(1); //for testing generating time stamps
-	//    }
 	return 0;
 }
