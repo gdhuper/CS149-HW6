@@ -28,9 +28,9 @@ void getElapsedSeconds(int* minsElapsed, double* secsElapsed)
 {
     struct timeval now;
     gettimeofday(&now, NULL);
-    double seconds = (double) now.tv_sec - old.tv_sec;
-    double useconds = (double) now.tv_usec - old.tv_usec;
-    double result = seconds + (useconds / 1000000);
+    double secs = (double) now.tv_sec - old.tv_sec;
+    double usecs = (double) now.tv_usec - old.tv_usec;
+    double result = secs + (usecs / 1000000);
     double temp =  round(result * 1000.0) / 1000.0;
 
     int intSec = floor(temp);
@@ -42,6 +42,9 @@ void getElapsedSeconds(int* minsElapsed, double* secsElapsed)
 
 }
 
+/*
+ * Simulates a child process
+ */
 void runChildProcess(int childID, int* fd)
 {
     char buf[BUFFER_SIZE];
@@ -51,7 +54,7 @@ void runChildProcess(int childID, int* fd)
     int messageNumber;
     time_t start, end;
     double elapsed;
-	char str[BUFFER_SIZE / 2];
+	char str[32];
 
     srand(time(NULL) ^ (getpid()<<16));
     start = time(NULL);
@@ -75,13 +78,13 @@ void runChildProcess(int childID, int* fd)
 
 				if (strlen(str) > 0) {
 					getElapsedSeconds(&minsElapsed, &secsElapsed);
-					snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %s", minsElapsed, secsElapsed, childID, str);
+					snprintf(buf, sizeof buf, "%d:%06.3f: Child %d: %s", minsElapsed, secsElapsed, childID, str);
 					close(*fd + READ_END);
 					write(*fd + WRITE_END, buf, strlen(buf) + 1);
 				}
             } else {
                 getElapsedSeconds(&minsElapsed, &secsElapsed);
-                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d: %d", minsElapsed, secsElapsed, childID, messageNumber++);
+                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %d", minsElapsed, secsElapsed, childID, messageNumber++);
 				close(*fd + READ_END);
 				write(*fd + WRITE_END, buf, strlen(buf) + 1);
             }
@@ -95,23 +98,27 @@ void runChildProcess(int childID, int* fd)
     exit(0);
 }
 
+/**
+ * Simulates parent process
+ */
 void runParentProcess(fd_set inputs, int fd[])
 {
     fd_set inputfds;
-    int j, k;
+    int i, j;
     char read_message[BUFFER_SIZE * NUM_CHILD];
     int result, nread;
     int minsElapsed;
     double secsElapsed;
-
-    k = NUM_CHILD;
 
     FILE *f = fopen("output.txt", "w");
     if (f == NULL) {
         perror("Error opening file!\n");
         exit(1);
     }
-    while (k > 0) {
+
+    j = NUM_CHILD;
+
+    while (j > 0) {
         inputfds = inputs;
 
         result = select(fd[NUM_CHILD * 2 - 1], &inputfds,
@@ -125,16 +132,16 @@ void runParentProcess(fd_set inputs, int fd[])
                 perror("select");
                 exit(1);
             default:
-                for (j = 0; j < NUM_CHILD * 2 && result != 0; j += 2) {
-                    if (FD_ISSET(fd[READ_END + j], &inputfds)) {
-                        ioctl(fd[READ_END + j], FIONREAD, &nread);
+                for (i = 0; i < NUM_CHILD * 2 && result > 0; i += 2) {
+                    if (FD_ISSET(fd[READ_END + i], &inputfds)) {
+                        ioctl(fd[READ_END + i], FIONREAD, &nread);
 
-                        close(fd[WRITE_END + j]);
-                        nread = read(fd[READ_END + j], read_message, nread);
+                        close(fd[WRITE_END + i]);
+                        nread = read(fd[READ_END + i], read_message, nread);
 
                         if (nread == 0) {
                             // pipe is closed, child is done
-                            --k;
+                            --j;
                         } else {
                             read_message[nread] = 0;
 							getElapsedSeconds(&minsElapsed, &secsElapsed);
