@@ -1,7 +1,6 @@
-//
-// Created by Gurpreet on 11/26/2016.
-//
-
+/*
+ * CS149 Section-1 Group-9
+ */
 #include <math.h>
 #include <string.h>
 #include <pthread.h>
@@ -70,7 +69,7 @@ void runChildProcess(int childID, int* fd)
 
         if (elapsed < MAX_TIME) {
             if (childID == 5) {
-                printf( "Enter a message: ");
+                printf( "Enter a message for Child 5: ");
                 fgets(str, sizeof(str), stdin);
 				str[strcspn(str, "\n")] = 0; // remove /n
 
