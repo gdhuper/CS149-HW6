@@ -14,7 +14,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-#define BUFFER_SIZE 32
+#define BUFFER_SIZE 64
 #define READ_END 0
 #define WRITE_END 1
 #define NUM_CHILD 5
@@ -52,6 +52,7 @@ void runChildProcess(int childID, int* fd)
     int messageNumber;
     time_t start, end;
     double elapsed;
+	char str[BUFFER_SIZE / 2];
 
     srand(time(NULL) ^ (getpid()<<16));
     start = time(NULL);
@@ -60,33 +61,31 @@ void runChildProcess(int childID, int* fd)
 
     // do stuff for 30 seconds
     //getElapsedSeconds(&minsElapsed, &tempSecs);
-    gettimeofday(&old, NULL);
     for (;;) {
-        sleep(rand() % 3);
-        end = time(NULL);
-        elapsed = difftime(end, start);
+		if (childID != 5) {
+			sleep(rand() % 3);
+		}
+		end = time(NULL);
+		elapsed = difftime(end, start);
 
         if (elapsed < MAX_TIME) {
-
-            if(childID == 5)
-            {
-                char str[100];
-
-                printf( "Enter a message :");
+            if (childID == 5) {
+                printf( "Enter a message: ");
                 fgets(str, sizeof(str), stdin);
-                getElapsedSeconds(&minsElapsed, &secsElapsed);
-                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %s", minsElapsed, secsElapsed, childID,
-                         str);
-                close(*fd + READ_END);
-                write(*fd + WRITE_END, buf, strlen(buf) + 1);
-            }
-            else{
-                getElapsedSeconds(&minsElapsed, &secsElapsed);
-                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %d", minsElapsed, secsElapsed, childID, messageNumber++);
-                close(*fd + READ_END);
-                write(*fd + WRITE_END, buf, strlen(buf) + 1);
-            }
+				str[strcspn(str, "\n")] = 0; // remove /n
 
+				if (strlen(str) > 0) {
+					getElapsedSeconds(&minsElapsed, &secsElapsed);
+					snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %s", minsElapsed, secsElapsed, childID, str);
+					close(*fd + READ_END);
+					write(*fd + WRITE_END, buf, strlen(buf) + 1);
+				}
+            } else {
+                getElapsedSeconds(&minsElapsed, &secsElapsed);
+                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d: %d", minsElapsed, secsElapsed, childID, messageNumber++);
+				close(*fd + READ_END);
+				write(*fd + WRITE_END, buf, strlen(buf) + 1);
+            }
         } else {
             break;
         }
@@ -103,6 +102,8 @@ void runParentProcess(fd_set inputs, int fd[])
     int j, k;
     char read_message[BUFFER_SIZE * NUM_CHILD];
     int result, nread;
+    int minsElapsed;
+    double secsElapsed;
 
     k = NUM_CHILD;
 
@@ -137,8 +138,8 @@ void runParentProcess(fd_set inputs, int fd[])
                             --k;
                         } else {
                             read_message[nread] = 0;
-                            // TODO: add timestamp
-                            fprintf(f, "%s\n", read_message);
+							getElapsedSeconds(&minsElapsed, &secsElapsed);
+                            fprintf(f, "%d:%06.3f: %s\n", minsElapsed, secsElapsed, read_message);
                         }
                         --result;
                     }
@@ -183,16 +184,12 @@ int main()
         }
     }
 
+    gettimeofday(&old, NULL);
+
     if (pid > 0) {
         // parent process
         runParentProcess(inputs, fd);
-    }
-    else if(pid == 0 && i ==4)
-    {
-        runChildProcess(i + 1, &fd[i * 2]);
-    }
-
-    else if (pid == 0) {
+    } else if (pid == 0) {
         // child process
         runChildProcess(i + 1, &fd[i * 2]);
     }
