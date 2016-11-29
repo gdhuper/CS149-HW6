@@ -64,7 +64,7 @@ void runChildProcess(int childID, int* fd)
 
 		if (elapsed < MAX_TIME) {
 			getElapsedSeconds(&minsElapsed, &secsElapsed);
-			snprintf(buf, sizeof buf, "0:%2.3f: Child %d message %d", secsElapsed, childID + 1, messageNumber++);
+			snprintf(buf, sizeof buf, "0:%2.3f: Child %d message %d", secsElapsed, childID, messageNumber++);
 			close(*fd + READ_END);
 			write(*fd + WRITE_END, buf, strlen(buf) + 1);
 		} else {
@@ -73,30 +73,73 @@ void runChildProcess(int childID, int* fd)
 	}
 	// close pipe, next read will return 0
 	close(*fd + WRITE_END);
-	printf("Child %d done.\n", childID + 1);
+	printf("Child %d done.\n", childID);
 	exit(0);
 }
 
-int main()
+void runParentProcess(fd_set inputs, int fd[])
 {
-	char read_msg[BUFFER_SIZE];
-
-	pid_t pid;
-	int fd[NUM_CHILD * 2];
-	int i, j, k;
-
-	char buffer[BUFFER_SIZE * NUM_CHILD];
+	fd_set inputfds;
+	int j, k;
+	char read_message[BUFFER_SIZE * NUM_CHILD];
 	int result, nread;
 
-	fd_set inputs, inputfds;
-
-	FD_ZERO(&inputs);
+	k = NUM_CHILD;
 
 	FILE *f = fopen("output.txt", "w");
 	if (f == NULL) {
 		perror("Error opening file!\n");
 		exit(1);
 	}
+	while (k > 0) {
+		inputfds = inputs;
+
+		result = select(fd[NUM_CHILD * 2 - 1], &inputfds,
+				NULL, NULL, NULL);
+
+		switch(result) {
+			case 0:
+				fflush(stdout);
+				break;
+			case -1:
+				perror("select");
+				exit(1);
+			default:
+				for (j = 0; j < NUM_CHILD * 2 && result != 0; j += 2) {
+					if (FD_ISSET(fd[READ_END + j], &inputfds)) {
+						ioctl(fd[READ_END + j], FIONREAD, &nread);
+
+						close(fd[WRITE_END + j]);
+						nread = read(fd[READ_END + j], read_message, nread);
+
+						if (nread == 0) {
+							// pipe is closed, child is done
+							--k;
+						} else {
+							read_message[nread] = 0;
+							// TODO: add timestamp
+							fprintf(f, "%s\n", read_message);
+						}
+						--result;
+					}
+				}
+		}
+	}
+
+	// close file
+	fclose(f);
+
+	puts("All children exited.");
+}
+
+int main()
+{
+	pid_t pid;
+	int fd[NUM_CHILD * 2];
+	int i;
+	fd_set inputs;
+
+	FD_ZERO(&inputs);
 
 	// Create pipes
 	for (i = 0; i < NUM_CHILD * 2; i += 2) {
@@ -112,8 +155,6 @@ int main()
 		pid = fork();	
 		if (pid == 0) {
 			// child process
-			j = i * 2;
-
 			// break here to continue with code below
 			break;
 		} else if (pid < 0) {
@@ -124,55 +165,10 @@ int main()
 
 	if (pid > 0) {
 		// parent process
-
-		// number of running child processes
-		k = NUM_CHILD;
-
-		while (k > 0) {
-			inputfds = inputs;
-
-			result = select(fd[NUM_CHILD * 2 - 1], &inputfds,
-					NULL, NULL, NULL);
-
-			switch(result) {
-				case 0: {
-					fflush(stdout);
-					break;
-				}
-				case -1: {
-					perror("select");
-					exit(1);
-				}
-				default: {
-					for (j = 0; j < NUM_CHILD * 2 && result != 0; j += 2) {
-						if (FD_ISSET(fd[READ_END + j], &inputfds)) {
-							ioctl(fd[READ_END + j], FIONREAD, &nread);
-							
-							close(fd[WRITE_END + j]);
-							nread = read(fd[READ_END + j], buffer, nread);
-
-							if (nread == 0) {
-								// pipe is closed, child is done
-								--k;
-							} else {
-								buffer[nread] = 0;
-								// TODO: add timestamp
-								fprintf(f, "%s\n", buffer);
-							}
-							--result;
-						}
-					}
-				}
-			}
-		}
-
-		// close file
-		fclose(f);
-
-		puts("All children exited.");
+		runParentProcess(inputs, fd);
 	} else if (pid == 0) {
 		// child process
-		runChildProcess(i, &fd[j]);
+		runChildProcess(i + 1, &fd[i * 2]);
 	}
 
 	return 0;
