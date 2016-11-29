@@ -78,13 +78,13 @@ void runChildProcess(int childID, int* fd)
 
 				if (strlen(str) > 0) {
 					getElapsedSeconds(&minsElapsed, &secsElapsed);
-					snprintf(buf, sizeof buf, "%d:%06.3f: Child %d: %s", minsElapsed, secsElapsed, childID, str);
+					snprintf(buf, sizeof buf, "%d:%06.3f: Child %d: %s \n", minsElapsed, secsElapsed, childID, str);
 					close(*fd + READ_END);
 					write(*fd + WRITE_END, buf, strlen(buf) + 1);
 				}
             } else {
                 getElapsedSeconds(&minsElapsed, &secsElapsed);
-                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %d", minsElapsed, secsElapsed, childID, messageNumber++);
+                snprintf(buf, sizeof buf, "%d:%06.3f: Child %d message %d \n", minsElapsed, secsElapsed, childID, messageNumber++);
 				close(*fd + READ_END);
 				write(*fd + WRITE_END, buf, strlen(buf) + 1);
             }
